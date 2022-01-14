@@ -1,7 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"github.com/cjdenio/underpass/pkg/client/cmd"
+)
 
 func main() {
-	fmt.Println("hi")
+	cmd.Execute()
 }

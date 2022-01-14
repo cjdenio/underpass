@@ -42,7 +42,7 @@ func main() {
 	r.HandleFunc("/start", func(rw http.ResponseWriter, r *http.Request) {
 		subdomain := r.URL.Query().Get("subdomain")
 		if subdomain == "" {
-			subdomain, _ = gonanoid.Generate("abcdefghijklmnopqrstuvwxyz0123456789", 10)
+			subdomain, _ = gonanoid.Generate("abcdefghijklmnopqrstuvwxyz0123456789", 5)
 		}
 
 		if _, ok := tunnels[subdomain]; ok {
@@ -65,11 +65,25 @@ func main() {
 			return
 		}
 
+		resp, err := msgpack.Marshal(map[string]string{
+			"type":      "subdomain",
+			"subdomain": subdomain,
+		})
+		if err != nil {
+			log.Println(err)
+		}
+
+		err = c.WriteMessage(websocket.BinaryMessage, resp)
+		if err != nil {
+			log.Println(err)
+		}
+
 		closeChan := make(chan struct{})
 		// Listen for disconnections
 		go func() {
 			for {
 				_, _, err := c.ReadMessage()
+
 				if err != nil {
 					close(closeChan)
 					break
@@ -95,7 +109,7 @@ func main() {
 					resp, err := msgpack.Marshal(map[string]interface{}{
 						"type":       "request",
 						"request_id": req.RequestID,
-						"data":       marshalled,
+						"request":    marshalled,
 					})
 					if err != nil {
 						log.Println(err)
