@@ -10,4 +10,4 @@ FROM alpine:latest AS runner
 
 COPY --from=builder /usr/src/app/server /usr/bin/underpass
 
-CMD [ "underpass" ]
+ENTRYPOINT [ "underpass" ]
