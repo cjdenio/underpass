@@ -36,7 +36,7 @@ var rootCmd = &cobra.Command{
 			RawQuery: query.Encode(),
 		}
 
-		t, err := tunnel.Connect(u.String())
+		t, err := tunnel.Connect(u.String(), fmt.Sprintf("http://localhost:%d", port))
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -52,7 +52,7 @@ var rootCmd = &cobra.Command{
 		color.New(color.Bold, color.FgCyan).Printf("http://localhost:%d\n\n", port)
 
 		if err = t.Wait(); err != nil {
-			fmt.Println(err)
+			fmt.Printf("\n❌ Disconnected from server. %s\n", color.New(color.FgHiBlack).Sprint(err))
 			os.Exit(1)
 		}
 	},
@@ -66,7 +66,7 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.Flags().StringVar(&host, "host", "localhost", "Host to connect to")
+	rootCmd.Flags().StringVar(&host, "host", "upass.clb.li", "Host to connect to")
 	rootCmd.Flags().BoolVar(&insecure, "insecure", false, "[ADVANCED] don't tunnel over TLS")
 	rootCmd.Flags().IntVarP(&port, "port", "p", 0, "Port to tunnel to")
 	rootCmd.Flags().StringVarP(&subdomain, "subdomain", "s", "", "Request a custom subdomain")

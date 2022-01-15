@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -17,6 +16,7 @@ import (
 
 type Request struct {
 	RequestID int
+	Close     bool
 	Data      interface{}
 }
 
@@ -102,14 +102,11 @@ func main() {
 					break X
 				}
 			case req := <-reqChan:
-				switch data := req.Data.(type) {
-				case *http.Request:
-					marshalled := util.MarshalRequest(data)
-
+				if req.Close {
+					// This indicates that the request body has ended
 					resp, err := msgpack.Marshal(map[string]interface{}{
-						"type":       "request",
+						"type":       "close",
 						"request_id": req.RequestID,
-						"request":    marshalled,
 					})
 					if err != nil {
 						log.Println(err)
@@ -119,19 +116,39 @@ func main() {
 					if err != nil {
 						log.Println(err)
 					}
-				case []byte:
-					resp, err := msgpack.Marshal(map[string]interface{}{
-						"type":       "data",
-						"request_id": req.RequestID,
-						"data":       data,
-					})
-					if err != nil {
-						log.Println(err)
-					}
+				} else {
+					// Infer based on data type
+					switch data := req.Data.(type) {
+					case *http.Request:
+						marshalled := util.MarshalRequest(data)
 
-					err = c.WriteMessage(websocket.BinaryMessage, resp)
-					if err != nil {
-						log.Println(err)
+						resp, err := msgpack.Marshal(map[string]interface{}{
+							"type":       "request",
+							"request_id": req.RequestID,
+							"request":    marshalled,
+						})
+						if err != nil {
+							log.Println(err)
+						}
+
+						err = c.WriteMessage(websocket.BinaryMessage, resp)
+						if err != nil {
+							log.Println(err)
+						}
+					case []byte:
+						resp, err := msgpack.Marshal(map[string]interface{}{
+							"type":       "data",
+							"request_id": req.RequestID,
+							"data":       data,
+						})
+						if err != nil {
+							log.Println(err)
+						}
+
+						err = c.WriteMessage(websocket.BinaryMessage, resp)
+						if err != nil {
+							log.Println(err)
+						}
 					}
 				}
 			}
@@ -160,7 +177,11 @@ func main() {
 						}
 					}
 
-					if err == io.EOF {
+					if err != nil {
+						t.reqChan <- Request{
+							RequestID: reqID,
+							Close:     true,
+						}
 						break
 					}
 				}
