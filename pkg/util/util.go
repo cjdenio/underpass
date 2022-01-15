@@ -14,6 +14,7 @@ func MarshalRequest(r *http.Request) models.Request {
 		Headers: r.Header,
 		Path:    r.RequestURI,
 		Method:  r.Method,
+		Host:    r.Host,
 	}
 }
 

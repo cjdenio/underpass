@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/cjdenio/underpass/pkg/models"
 	"github.com/cjdenio/underpass/pkg/util"
@@ -71,6 +72,9 @@ func main() {
 			return
 		}
 
+		writeMutex := sync.Mutex{}
+
+		writeMutex.Lock()
 		err = util.WriteMsgPack(c, models.ServerMessage{
 			Type:      "subdomain",
 			Subdomain: subdomain,
@@ -78,6 +82,7 @@ func main() {
 		if err != nil {
 			log.Println(err)
 		}
+		writeMutex.Unlock()
 
 		// Listen for messages (and disconnections)
 		closeChan := make(chan struct{})
@@ -114,6 +119,7 @@ func main() {
 			case req := <-reqChan:
 				if req.Close {
 					// This indicates that the request body has ended
+					writeMutex.Lock()
 					err = util.WriteMsgPack(c, models.ServerMessage{
 						Type:      "close",
 						RequestID: req.RequestID,
@@ -121,12 +127,14 @@ func main() {
 					if err != nil {
 						log.Println(err)
 					}
+					writeMutex.Unlock()
 				} else {
 					// Infer based on data type
 					switch data := req.Data.(type) {
 					case *http.Request:
 						marshalled := util.MarshalRequest(data)
 
+						writeMutex.Lock()
 						err = util.WriteMsgPack(c, models.ServerMessage{
 							Type:      "request",
 							RequestID: req.RequestID,
@@ -135,7 +143,9 @@ func main() {
 						if err != nil {
 							log.Println(err)
 						}
+						writeMutex.Unlock()
 					case []byte:
+						writeMutex.Lock()
 						err = util.WriteMsgPack(c, models.ServerMessage{
 							Type:      "data",
 							RequestID: req.RequestID,
@@ -144,6 +154,7 @@ func main() {
 						if err != nil {
 							log.Println(err)
 						}
+						writeMutex.Unlock()
 					}
 				}
 			}
@@ -160,26 +171,29 @@ func main() {
 				Data:      r,
 			}
 
+			// Pipe request body
 			if r.Body != nil {
-				for {
-					d := make([]byte, 50)
-					n, err := r.Body.Read(d)
+				go func() {
+					for {
+						d := make([]byte, 50)
+						n, err := r.Body.Read(d)
 
-					if n > 0 {
-						t.reqChan <- Request{
-							RequestID: reqID,
-							Data:      d[0:n],
+						if n > 0 {
+							t.reqChan <- Request{
+								RequestID: reqID,
+								Data:      d[0:n],
+							}
+						}
+
+						if err != nil {
+							t.reqChan <- Request{
+								RequestID: reqID,
+								Close:     true,
+							}
+							break
 						}
 					}
-
-					if err != nil {
-						t.reqChan <- Request{
-							RequestID: reqID,
-							Close:     true,
-						}
-						break
-					}
-				}
+				}()
 			}
 
 			messageChannel := make(chan models.ClientMessage)

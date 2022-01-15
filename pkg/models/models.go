@@ -8,6 +8,7 @@ type Request struct {
 	Headers http.Header `msgpack:"headers"`
 	Path    string      `msgpack:"path"`
 	Method  string      `msgpack:"method"`
+	Host    string      `msgpack:"host"`
 }
 
 type Response struct {

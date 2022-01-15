@@ -67,6 +67,7 @@ func Connect(url, address string) (*Tunnel, error) {
 				t.activeRequests[msg.RequestID] = write
 
 				request.Header = msg.Request.Headers
+				request.Host = msg.Request.Host
 
 				// Perform the request in a goroutine
 				go func(request *http.Request, reqID int, cancel context.CancelFunc) {
