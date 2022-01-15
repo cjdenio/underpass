@@ -232,7 +232,7 @@ func main() {
 			}
 		} else {
 			rw.WriteHeader(http.StatusNotFound)
-			rw.Write([]byte(fmt.Sprintf("Tunnel %s not found.\n\nStart it with `underpass -p PORT -s haas` 😎", subdomain)))
+			rw.Write([]byte(fmt.Sprintf("Tunnel %[1]s not found.\n\nStart it with `underpass -p PORT -s %[1]s` 😎", subdomain)))
 		}
 	})
 
