@@ -16,7 +16,7 @@ var port int
 var subdomain string
 
 var rootCmd = &cobra.Command{
-	Use:   "upass",
+	Use:   "underpass",
 	Short: "The Underpass CLI",
 	Run: func(cmd *cobra.Command, args []string) {
 		scheme := "wss"
@@ -66,7 +66,7 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.Flags().StringVar(&host, "host", "upass.clb.li", "Host to connect to")
+	rootCmd.Flags().StringVar(&host, "host", "underpass.clb.li", "Host to connect to")
 	rootCmd.Flags().BoolVar(&insecure, "insecure", false, "[ADVANCED] don't tunnel over TLS")
 	rootCmd.Flags().IntVarP(&port, "port", "p", 0, "Port to tunnel to")
 	rootCmd.Flags().StringVarP(&subdomain, "subdomain", "s", "", "Request a custom subdomain")

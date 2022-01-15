@@ -66,6 +66,8 @@ func Connect(url, address string) (*Tunnel, error) {
 				request, _ := http.NewRequestWithContext(ctx, msg.Request.Method, address+msg.Request.Path, read)
 				t.activeRequests[msg.RequestID] = write
 
+				request.Header = msg.Request.Headers
+
 				// Perform the request in a goroutine
 				go func(request *http.Request, reqID int, cancel context.CancelFunc) {
 					defer cancel()
@@ -84,23 +86,23 @@ func Connect(url, address string) (*Tunnel, error) {
 						}
 						writeMutex.Unlock()
 						return
-					} else {
-						color.New(color.FgHiBlack).Printf("%d --> ", msg.RequestID)
-						fmt.Printf("%s %s", msg.Request.Method, msg.Request.Path)
-						color.New(color.FgHiBlack).Print(" --> ")
-						fmt.Printf("%s\n", resp.Status)
-
-						writeMutex.Lock()
-						err = util.WriteMsgPack(c, models.ClientMessage{
-							Type:      "response",
-							RequestID: reqID,
-							Response:  util.MarshalResponse(resp),
-						})
-						if err != nil {
-							fmt.Println(err)
-						}
-						writeMutex.Unlock()
 					}
+
+					color.New(color.FgHiBlack).Printf("%d --> ", msg.RequestID)
+					fmt.Printf("%s %s", msg.Request.Method, msg.Request.Path)
+					color.New(color.FgHiBlack).Print(" --> ")
+					fmt.Printf("%s\n", resp.Status)
+
+					writeMutex.Lock()
+					err = util.WriteMsgPack(c, models.ClientMessage{
+						Type:      "response",
+						RequestID: reqID,
+						Response:  util.MarshalResponse(resp),
+					})
+					if err != nil {
+						fmt.Println(err)
+					}
+					writeMutex.Unlock()
 
 					// Read the body
 					for {
@@ -137,8 +139,6 @@ func Connect(url, address string) (*Tunnel, error) {
 				if v, ok := t.activeRequests[msg.RequestID]; ok {
 					v.Write(msg.Data)
 				}
-			default:
-				fmt.Printf("unknown type: %s\n", msg.Type)
 			}
 		}
 	}()

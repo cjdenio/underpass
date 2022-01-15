@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
@@ -195,6 +196,9 @@ func main() {
 						delete(t.listeners, reqID)
 						break X
 					case "response":
+						for i, v := range message.Response.Headers {
+							rw.Header().Add(i, strings.Join(v, ","))
+						}
 						rw.WriteHeader(message.Response.StatusCode)
 					case "data":
 						rw.Write(message.Data)
@@ -205,7 +209,7 @@ func main() {
 			}
 		} else {
 			rw.WriteHeader(http.StatusNotFound)
-			rw.Write([]byte("Tunnel not found."))
+			rw.Write([]byte(fmt.Sprintf("Tunnel %s not found.\n\nStart it with `underpass -p PORT -s haas` 😎", subdomain)))
 		}
 	})
 
