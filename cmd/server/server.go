@@ -25,10 +25,11 @@ type Request struct {
 type Tunnel struct {
 	reqChan chan Request
 
-	listeners map[int]chan models.ClientMessage
+	listeners      map[int]chan models.ClientMessage
+	listenersMutex sync.RWMutex
 }
 
-var tunnels = make(map[string]Tunnel)
+var tunnels = make(map[string]*Tunnel)
 
 var upgrader = websocket.Upgrader{}
 
@@ -63,7 +64,7 @@ func main() {
 			listeners: make(map[int]chan models.ClientMessage),
 		}
 
-		tunnels[subdomain] = t
+		tunnels[subdomain] = &t
 
 		c, err := upgrader.Upgrade(rw, r, nil)
 		if err != nil {
@@ -97,12 +98,16 @@ func main() {
 				}
 
 				if message.Type == "close" {
+					t.listenersMutex.Lock()
 					close(t.listeners[message.RequestID])
 					delete(t.listeners, message.RequestID)
+					t.listenersMutex.Unlock()
 					continue
 				}
 
+				t.listenersMutex.RLock()
 				t.listeners[message.RequestID] <- message
+				t.listenersMutex.RUnlock()
 			}
 		}()
 
@@ -197,7 +202,9 @@ func main() {
 			}
 
 			messageChannel := make(chan models.ClientMessage)
+			t.listenersMutex.Lock()
 			t.listeners[reqID] = messageChannel
+			t.listenersMutex.Unlock()
 
 		X:
 			for {
@@ -206,8 +213,10 @@ func main() {
 					case "proxy_error":
 						rw.WriteHeader(http.StatusBadGateway)
 						rw.Write([]byte("Proxy error. See your terminal for more information."))
+						t.listenersMutex.Lock()
 						close(messageChannel)
 						delete(t.listeners, reqID)
+						t.listenersMutex.Unlock()
 						break X
 					case "response":
 						for i, v := range message.Response.Headers {
