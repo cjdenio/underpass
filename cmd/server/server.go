@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cjdenio/underpass/pkg/server/util"
+	"github.com/cjdenio/underpass/pkg/models"
+	"github.com/cjdenio/underpass/pkg/util"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	gonanoid "github.com/matoous/go-nanoid/v2"
-	"github.com/vmihailenco/msgpack/v5"
 )
 
 type Request struct {
@@ -22,6 +22,8 @@ type Request struct {
 
 type Tunnel struct {
 	reqChan chan Request
+
+	listeners map[int]chan models.ClientMessage
 }
 
 var tunnels = make(map[string]Tunnel)
@@ -54,9 +56,12 @@ func main() {
 		}
 
 		reqChan := make(chan Request)
-		tunnels[subdomain] = Tunnel{
-			reqChan: reqChan,
+		t := Tunnel{
+			reqChan:   reqChan,
+			listeners: make(map[int]chan models.ClientMessage),
 		}
+
+		tunnels[subdomain] = t
 
 		c, err := upgrader.Upgrade(rw, r, nil)
 		if err != nil {
@@ -65,29 +70,33 @@ func main() {
 			return
 		}
 
-		resp, err := msgpack.Marshal(map[string]string{
-			"type":      "subdomain",
-			"subdomain": subdomain,
+		err = util.WriteMsgPack(c, models.ServerMessage{
+			Type:      "subdomain",
+			Subdomain: subdomain,
 		})
 		if err != nil {
 			log.Println(err)
 		}
 
-		err = c.WriteMessage(websocket.BinaryMessage, resp)
-		if err != nil {
-			log.Println(err)
-		}
-
+		// Listen for messages (and disconnections)
 		closeChan := make(chan struct{})
-		// Listen for disconnections
 		go func() {
 			for {
-				_, _, err := c.ReadMessage()
-
+				var message models.ClientMessage
+				err = util.ReadMsgPack(c, &message)
 				if err != nil {
 					close(closeChan)
+					c.Close()
 					break
 				}
+
+				if message.Type == "close" {
+					close(t.listeners[message.RequestID])
+					delete(t.listeners, message.RequestID)
+					continue
+				}
+
+				t.listeners[message.RequestID] <- message
 			}
 		}()
 
@@ -104,15 +113,10 @@ func main() {
 			case req := <-reqChan:
 				if req.Close {
 					// This indicates that the request body has ended
-					resp, err := msgpack.Marshal(map[string]interface{}{
-						"type":       "close",
-						"request_id": req.RequestID,
+					err = util.WriteMsgPack(c, models.ServerMessage{
+						Type:      "close",
+						RequestID: req.RequestID,
 					})
-					if err != nil {
-						log.Println(err)
-					}
-
-					err = c.WriteMessage(websocket.BinaryMessage, resp)
 					if err != nil {
 						log.Println(err)
 					}
@@ -122,30 +126,20 @@ func main() {
 					case *http.Request:
 						marshalled := util.MarshalRequest(data)
 
-						resp, err := msgpack.Marshal(map[string]interface{}{
-							"type":       "request",
-							"request_id": req.RequestID,
-							"request":    marshalled,
+						err = util.WriteMsgPack(c, models.ServerMessage{
+							Type:      "request",
+							RequestID: req.RequestID,
+							Request:   marshalled,
 						})
-						if err != nil {
-							log.Println(err)
-						}
-
-						err = c.WriteMessage(websocket.BinaryMessage, resp)
 						if err != nil {
 							log.Println(err)
 						}
 					case []byte:
-						resp, err := msgpack.Marshal(map[string]interface{}{
-							"type":       "data",
-							"request_id": req.RequestID,
-							"data":       data,
+						err = util.WriteMsgPack(c, models.ServerMessage{
+							Type:      "data",
+							RequestID: req.RequestID,
+							Data:      data,
 						})
-						if err != nil {
-							log.Println(err)
-						}
-
-						err = c.WriteMessage(websocket.BinaryMessage, resp)
 						if err != nil {
 							log.Println(err)
 						}
@@ -186,10 +180,32 @@ func main() {
 					}
 				}
 			}
-			rw.Write([]byte("success ✅"))
+
+			messageChannel := make(chan models.ClientMessage)
+			t.listeners[reqID] = messageChannel
+
+		X:
+			for {
+				if message, ok := <-messageChannel; ok {
+					switch message.Type {
+					case "proxy_error":
+						rw.WriteHeader(http.StatusBadGateway)
+						rw.Write([]byte("Proxy error. See your terminal for more information."))
+						close(messageChannel)
+						delete(t.listeners, reqID)
+						break X
+					case "response":
+						rw.WriteHeader(message.Response.StatusCode)
+					case "data":
+						rw.Write(message.Data)
+					}
+				} else {
+					break
+				}
+			}
 		} else {
 			rw.WriteHeader(http.StatusNotFound)
-			rw.Write([]byte("tunnel not found"))
+			rw.Write([]byte("Tunnel not found."))
 		}
 	})
 

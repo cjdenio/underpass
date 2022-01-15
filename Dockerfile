@@ -4,10 +4,10 @@ WORKDIR /usr/src/app
 
 COPY . .
 
-RUN go build -o server ./cmd/server
+RUN go build -o bin/server ./cmd/server
 
-FROM alpine:latest AS runner
+FROM alpine:3.15 AS runner
 
-COPY --from=builder /usr/src/app/server /usr/bin/underpass
+COPY --from=builder /usr/src/app/bin/server /usr/bin/underpass
 
 ENTRYPOINT [ "underpass" ]
