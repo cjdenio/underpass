@@ -40,9 +40,7 @@ func main() {
 
 	r := mux.NewRouter()
 
-	r.HandleFunc("/", func(rw http.ResponseWriter, r *http.Request) {
-		rw.Write([]byte("welcome to underpass"))
-	}).Host(*host)
+	r.Handle("/", http.RedirectHandler("https://github.com/cjdenio/underpass", http.StatusTemporaryRedirect)).Host(*host)
 
 	r.HandleFunc("/start", func(rw http.ResponseWriter, r *http.Request) {
 		subdomain := r.URL.Query().Get("subdomain")
@@ -50,11 +48,29 @@ func main() {
 			subdomain, _ = gonanoid.Generate("abcdefghijklmnopqrstuvwxyz0123456789", 5)
 		}
 
+		c, err := upgrader.Upgrade(rw, r, nil)
+		if err != nil {
+			rw.WriteHeader(http.StatusBadRequest)
+			rw.Write([]byte(err.Error()))
+			return
+		}
+
+		writeMutex := sync.Mutex{}
+
 		if _, ok := tunnels[subdomain]; ok {
 			// Tunnel already exists
 
-			rw.WriteHeader(http.StatusConflict)
-			rw.Write([]byte("Tunnel is already running"))
+			writeMutex.Lock()
+			err = util.WriteMsgPack(c, models.ServerMessage{
+				Type:  "error",
+				Error: fmt.Sprintf("Tunnel %s is already in use.", subdomain),
+			})
+			if err != nil {
+				log.Println(err)
+			}
+			writeMutex.Unlock()
+
+			c.Close()
 			return
 		}
 
@@ -65,15 +81,6 @@ func main() {
 		}
 
 		tunnels[subdomain] = &t
-
-		c, err := upgrader.Upgrade(rw, r, nil)
-		if err != nil {
-			rw.WriteHeader(http.StatusBadRequest)
-			rw.Write([]byte(err.Error()))
-			return
-		}
-
-		writeMutex := sync.Mutex{}
 
 		writeMutex.Lock()
 		err = util.WriteMsgPack(c, models.ServerMessage{

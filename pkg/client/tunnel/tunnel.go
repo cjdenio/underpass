@@ -1,6 +1,7 @@
 package tunnel
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,6 +43,7 @@ func Connect(url, address string) (*Tunnel, error) {
 	writeMutex := sync.Mutex{}
 
 	go func() {
+	X:
 		for {
 			var msg models.ServerMessage
 
@@ -146,6 +148,10 @@ func Connect(url, address string) (*Tunnel, error) {
 				if v, ok := t.activeRequests[msg.RequestID]; ok {
 					v.Write(msg.Data)
 				}
+			case "error":
+				c.Close()
+				closeChan <- errors.New(msg.Error)
+				break X
 			}
 		}
 	}()

@@ -23,6 +23,7 @@ type ServerMessage struct {
 	Subdomain string  `msgpack:"subdomain"`
 	Request   Request `msgpack:"request"`
 	Data      []byte  `msgpack:"data"`
+	Error     string  `msg:"error"`
 }
 
 // Represents a message passed from the client to the server

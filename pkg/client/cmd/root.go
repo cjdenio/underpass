@@ -39,6 +39,7 @@ var rootCmd = &cobra.Command{
 		t, err := tunnel.Connect(u.String(), fmt.Sprintf("http://localhost:%d", port))
 		if err != nil {
 			fmt.Println(err)
+			os.Exit(1)
 			return
 		}
 
