@@ -73,7 +73,13 @@ func Connect(url, address string) (*Tunnel, error) {
 				go func(request *http.Request, reqID int, cancel context.CancelFunc) {
 					defer cancel()
 
-					resp, err := http.DefaultClient.Do(request)
+					client := http.Client{
+						CheckRedirect: func(req *http.Request, via []*http.Request) error {
+							return http.ErrUseLastResponse
+						},
+					}
+
+					resp, err := client.Do(request)
 					if err != nil {
 						color.New(color.FgHiBlack).Printf("%d --> ", msg.RequestID)
 						fmt.Printf("%s %s", msg.Request.Method, msg.Request.Path)
