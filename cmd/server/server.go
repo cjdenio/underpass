@@ -187,7 +187,8 @@ func main() {
 			if r.Body != nil {
 				go func() {
 					for {
-						d := make([]byte, 50)
+						// Read up to 1 MB
+						d := make([]byte, 1000000)
 						n, err := r.Body.Read(d)
 
 						if n > 0 {

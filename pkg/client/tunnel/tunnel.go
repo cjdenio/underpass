@@ -115,7 +115,8 @@ func Connect(url, address string) (*Tunnel, error) {
 
 					// Read the body
 					for {
-						d := make([]byte, 50)
+						// Read up to 1 MB
+						d := make([]byte, 1000000)
 						n, err := resp.Body.Read(d)
 
 						if n > 0 {
